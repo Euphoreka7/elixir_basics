@@ -512,7 +512,7 @@ defmodule MyList do
   end
 
 end
-
+```
 #### Dictionaries
 `Keyword` if more than one entry with the same key or ordering required. `Map` for patten matching. `HashDict` for more than hundred entries.
 
