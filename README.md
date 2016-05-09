@@ -963,9 +963,120 @@ for x <- ~w{ cat dog }, into: %{"ant" => "ANT"}, do: { x, String.upcase(x) } # %
 for x <- ~w{ cat dog }, into: IO.stream(:stdio,:line), do: "<<#{x}>>\n" <<cat>>
 <<dog>>
 ```
+#### Strings
+```
+IO.puts "start" IO.write "
+  my
+  string
+"
+IO.puts "end"
+```
+produces
+```
+start
+  my
+  string
+end
+```
+```
+IO.puts "start"
+IO.write """
+  my
+  string
+"""
+IO.puts "end"
+```
+produces
+```
+start
+my
+string
+end
+```
+#### Sigils
+Delimiters:
+```
+<...>, {...}, [...], (...), |...|, /.../, "...", '...'
+```
+types:
+```
+~C A character list with no escaping or interpolation
+~c A character list, escaped and interpolated just like a single-quoted string 
+~R A regular expression with no escaping or interpolation
+~r A regular expression, escaped and interpolated
+~S A string with no escaping or interpolation
+~s A string, escaped and interpolated just like a double-quoted string
+~W A list of whitespace-delimited words, with no escaping or interpolation 
+~w A list of whitespace-delimited words, with escaping and interpolation
+```
+examples:
+```
+~C[1\n2#{1+2}] # '1\\n2\#{1+2}'
+~c"1\n2#{1+2}" # '1\n23'
+~S[1\n2#{1+2}] # "1\\n2\#{1+2}"
+~s/1\n2#{1+2}/ # "1\n23"
+~W[the c#{'a'}t sat on the mat] # ["the", "c\#{'a'}t", "sat", "on", "the", "mat"]
+~w[the c#{'a'}t sat on the mat] # ["the", "cat", "sat", "on", "the", "mat"]
+```
+optional type specifier: a(atoms), c(list), s(strings of characters)
+```
+~w[the c#{'a'}t sat on the mat]a # [:the, :cat, :sat, :on, :the, :mat]
+~w[the c#{'a'}t sat on the mat]c # ['the', 'cat', 'sat', 'on', 'the', 'mat']
+~w[the c#{'a'}t sat on the mat]s # ["the", "cat", "sat", "on", "the", "mat"]
 
+~w"""
+the
+cat
+sat
+"""
+["the", "cat", "sat"]
 
+~r"""
+hello
+"""i
+~r/hello\n/i
+```
+#### Single-Quoted Strings - Lists of Character Codes
+```
+str = 'wombat' # 'wombat'
+is_list str # true
+length str # 6
+Enum.reverse str # 'tabmow'
 
+str = 'wombat' # 'wombat'
+:io.format "~w~n", [ str ] # [119,111,109,98,97,116]
+List.to_tuple str # {119, 111, 109, 98, 97, 116}
+str ++ [0] # [119, 111, 109, 98, 97, 116, 0]
 
+'∂x/∂y' # [8706, 120, 47, 8706, 121]
+'pole' ++ 'vault' # 'polevault'
+'pole' -- 'vault' # 'poe'
 
+List.zip [ 'abc', '123' ] # [{97, 49}, {98, 50}, {99, 51}]
 
+[ head | tail ] = 'cat'
+head # 99
+tail # 'at'
+[ head | tail ] # 'cat'
+```
+
+```
+defmodule Parse do
+  def number([ ?- | tail ]), do: _number_digits(tail, 0) * -1 
+  def number([ ?+ | tail ]), do: _number_digits(tail, 0)
+  def number(str), do: _number_digits(str, 0)
+  
+  defp _number_digits([], value), do: value 
+  defp _number_digits([ digit | tail ], value) 
+  when digit in '0123456789' do
+    _number_digits(tail, value*10 + digit - ?0)
+  end
+  defp _number_digits([ non_digit | _ ], _) do
+    raise "Invalid digit '#{[non_digit]}'"
+  end
+end
+
+Parse.number('123') # 123
+Parse.number('-123') # -123
+Parse.number('+123') # 123
+```
