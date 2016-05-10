@@ -1001,12 +1001,12 @@ Delimiters:
 types:
 ```
 ~C A character list with no escaping or interpolation
-~c A character list, escaped and interpolated just like a single-quoted string 
+~c A character list, escaped and interpolated just like a single-quoted string
 ~R A regular expression with no escaping or interpolation
 ~r A regular expression, escaped and interpolated
 ~S A string with no escaping or interpolation
 ~s A string, escaped and interpolated just like a double-quoted string
-~W A list of whitespace-delimited words, with no escaping or interpolation 
+~W A list of whitespace-delimited words, with no escaping or interpolation
 ~w A list of whitespace-delimited words, with escaping and interpolation
 ```
 examples:
@@ -1062,12 +1062,12 @@ tail # 'at'
 
 ```
 defmodule Parse do
-  def number([ ?- | tail ]), do: _number_digits(tail, 0) * -1 
+  def number([ ?- | tail ]), do: _number_digits(tail, 0) * -1
   def number([ ?+ | tail ]), do: _number_digits(tail, 0)
   def number(str), do: _number_digits(str, 0)
-  
-  defp _number_digits([], value), do: value 
-  defp _number_digits([ digit | tail ], value) 
+
+  defp _number_digits([], value), do: value
+  defp _number_digits([ digit | tail ], value)
   when digit in '0123456789' do
     _number_digits(tail, value*10 + digit - ?0)
   end
@@ -1079,4 +1079,213 @@ end
 Parse.number('123') # 123
 Parse.number('-123') # -123
 Parse.number('+123') # 123
+```
+#### Binaries
+```
+b = << 1, 2, 3 >> # <<1, 2, 3>>
+byte_size b # 3
+bit_size b # 24
+
+b = << 1::size(2), 1::size(3) >> # <<9::size(5)>>
+byte_size b # 1
+bit_size b # 5
+
+int = << 1 >> # <<1>>
+float = << 2.5 :: float >> # <<64, 4, 0, 0, 0, 0, 0, 0>>
+mix = << int :: binary, float :: binary >> # <<1, 64, 4, 0, 0, 0, 0, 0, 0>>
+```
+#### Double-Quoted Strings Are Binaries
+```
+dqs = "∂x/∂y" # "∂x/∂y"
+String.length dqs # 5
+byte_size dqs # 9
+String.at(dqs, 0) # "∂"
+String.codepoints(dqs) # ["∂", "x", "/", "∂", "y"]
+String.split(dqs, "/") # ["∂x", "∂y"]
+```
+#### Strings and Elixir Libraries
+```
+String.at("∂og", 0) # "∂"
+String.at("∂og", -1) # "g"
+String.capitalize "école" # "École"
+String.capitalize "ÎÎÎÎÎ" # "Îîîîî"
+String.codepoints("∂x/∂y") # ["∂", "x", "/", "∂", "y"]
+String.downcase "ØRSteD" # "ørsted"
+String.duplicate "Ho! ", 3 # "Ho! Ho! Ho! "
+String.ends_with? "string", ["elix", "stri", "ring"] # true
+String.first "∂og" # "∂"
+String.last "∂og" # "g"
+String.length "∂x/∂y" # 5
+String.ljust("cat", 5) # "cat  "
+String.lstrip "\t\f Hello\t\n" # "Hello\t\n"
+String.lstrip "!!!SALE!!!", ?! # "SALE!!!"
+String.printable? "José" # true
+String.printable? "\x{0000} a null" # false
+String.replace "the cat on the mat", "at", "AT"                         # "the cAT on the mAT"
+String.replace "the cat on the mat", "at", "AT", global: false          # "the cAT on the mat"
+String.replace "the cat on the mat", "at", "AT", insert_replaced: 0     # "the catAT on the matAT"
+String.replace "the cat on the mat", "at", "AT", insert_replaced: [0,2] # "the catATat on the matATat"
+String.reverse "pupils" # "slipup"
+String.reverse "∑ƒ÷∂" # "∂÷ƒ∑"
+String.rjust("cat", 5, ?>) # ">>cat"
+String.rstrip(" line \r\n") " line"
+String.rstrip "!!!SALE!!!", ?! # "!!!SALE"
+String.slice "the cat on the mat", 4, 3 # "cat"
+String.slice "the cat on the mat", -3, 3 # "mat"
+String.split " the cat on the mat "                   # ["the", "cat", "on", "the", "mat"]
+String.split "the cat on the mat", "t"                # ["", "he ca", " on ", "he ma", ""]
+String.split "the cat on the mat", ~r{[ae]}           # ["th", " c", "t on th", " m", "t"]
+String.split "the cat on the mat", ~r{[ae]}, parts: 2 # ["th", " cat on the mat"]
+String.starts_with? "string", ["elix", "stri", "ring"] # true
+String.strip "\t Hello \r\n" # "Hello"
+String.strip "!!!SALE!!!", ?! # "SALE"
+String.upcase "José Ørstüd" # "JOSÉ ØRSTÜD"
+String.valid_character? "∂" # true
+String.valid_character? "∂og" # false
+
+
+defmodule MyString do
+  def each(str, func), do: _each(String.next_codepoint(str), func)
+  defp _each({codepoint, rest}, func) do
+    func.(codepoint)
+    _each(String.next_codepoint(rest), func)
+  end
+  defp _each(nil, _), do: []
+end
+MyString.each "∂og", fn c -> IO.puts c end
+```
+#### Binaries and Pattern Matching
+Types: binary, bits, bitstring, bytes, float, integer, utf8, utf16, and utf32.
+Qualifiers: size(n), signed/unsigned, big/little/native (endianness)
+```
+<< length::unsigned-integer-size(12), flags::bitstring-size(4) >>  = data
+```
+```
+defmodule Utf8 do
+  def each(str, func) when is_binary(str), do: _each(str, func)
+  defp _each(<< head :: utf8, tail :: binary >>, func) do
+    func.(head)
+    _each(tail, func)
+  end
+  defp _each(<<>>, _func), do: []
+end
+
+Utf8.each "∂og", fn char -> IO.puts char end # 8706 111 103
+```
+#### if and unless
+```
+if 1 == 1, do: "true part", else: "false part" # "true part"
+if 1 == 2, do: "true part", else: "false part" # "false part"
+
+if 1 == 1 do
+  "true part"
+else
+  "false part"
+end # "true part"
+
+unless 1 == 1, do: "error", else: "OK" # "OK"
+unless 1 == 2, do: "OK", else: "error" # "OK"
+
+unless 1 == 2 do
+  "OK"
+else
+  "error"
+end # "OK"
+```
+#### cond
+```
+defmodule FizzBuzz do
+  def upto(n) when n > 0, do: _downto(n, [])
+
+  defp _downto(0, result), do: result
+  defp _downto(current, result) do
+    next_answer =
+      cond do
+        rem(current, 3) == 0 and rem(current, 5) == 0 ->
+          "FizzBuzz"
+        rem(current, 3) == 0 ->
+          "Fizz"
+        rem(current, 5) == 0 ->
+          "Buzz"
+        true ->
+          current
+      end
+    _downto(current - 1, [next_answer | result])
+  end
+end
+
+defmodule FizzBuzz do
+  def upto(n) when n > 0 do
+    1..n |> Enum.map(&fizzbuzz/1)
+  end
+
+  defp fizzbuzz(n) do
+    cond do
+      rem(n, 3) == 0 and rem(n, 5) == 0 ->
+        "FizzBuzz"
+      rem(n, 3) == 0 ->
+        "Fizz"
+      rem(n, 5) == 0 ->
+        "Buzz"
+      true ->
+        n
+    end
+  end
+end
+
+defmodule FizzBuzz do
+  def upto(n) when n > 0 do
+    1..n |> Enum.map(&fizzbuzz/1)
+  end
+
+  defp fizzbuzz(n) when rem(n, 3) == 0 and rem(n, 5) == 0, do: "FizzBuzz"
+  defp fizzbuzz(n) when rem(n, 3) == 0, do: "Fizz"
+  defp fizzbuzz(n) when rem(n, 5) == 0, do: "Buzz"
+  defp fizzbuzz(n), do: n
+end
+```
+#### case
+```
+case File.open("case.ex") do
+{:ok, file} ->
+  IO.puts "First line: #{IO.read(file, :line)}"
+{:error, reason} ->
+  IO.puts "Failed to open file: #{reason}"
+end
+
+defmodule Users do
+  bob = %{name: "Bob", state: "TX", likes: "food"}
+
+  case bob do
+    %{state: some_state} = person ->
+      IO.puts "#{person.name} lives in #{some_state}"
+    _ ->
+      IO.puts "No matches"
+  end
+end
+
+defmodule Bouncer do
+  bob = %{name: "Bob", age: 27}
+
+  case bob do
+    person = %{age: age} when is_number(age) and age >= 21 ->
+      IO.puts "It's fine, #{person.name}"
+    _ ->
+      IO.puts "Something goes wrong"
+  end
+end
+```
+#### Raising Exceptions
+```
+raise "Giving up" # ** (RuntimeError) Giving up
+raise RuntimeError # ** (RuntimeError) runtime error
+raise RuntimeError, message: "override message" # ** (RuntimeError) override message
+```
+#### Designing with Exceptions
+```
+case File.open("config_file") do
+{:ok, file} ->
+  process(file)
+{:error, :message} ->
+  raise -> "Failed to open file: #{message}"
 ```
