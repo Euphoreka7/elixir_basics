@@ -1289,3 +1289,70 @@ case File.open("config_file") do
 {:error, :message} ->
   raise -> "Failed to open file: #{message}"
 ```
+### Multiple Processes
+```
+defmodule SpawnBasic do
+  def greet do
+    IO.puts "Hello"
+  end
+end
+
+SpawnBasic.greet # Hello
+spawn(SpawnBasic, :greet, []) # Hello #PID<0.42.0>
+```
+#### Sending Messages Between Processes
+```
+defmodule Spawn1 do
+  def greet do
+    receive do
+      {sender, msg} ->
+        send sender, {:ok, "Hello, #{msg}"}
+    end
+  end
+end
+
+pid = spawn(Spawn1, :greet, [])
+send pid, {self, "World!"}
+
+receive do
+  {:ok, message} ->
+    IO.puts message
+end
+```
+#### Handling Multiple Messages
+```
+defmodule Spawn2 do
+  def greet do
+    receive do
+      {sender, msg} ->
+        send sender, {:ok, "Hello, #{msg}"}
+        greet
+    end
+  end
+end
+
+pid = spawn(Spawn2, :greet, [])
+
+send pid, {self, "World!"}
+
+receive do
+  {:ok, message} ->
+    IO.puts message
+end
+
+send pid, {self, "Kermit!"}
+receive do
+  {:ok, message} ->
+    IO.puts message
+  after 500 ->
+    IO.puts "The greeter has gone away"
+end
+```
+#### Recursive Fib
+```
+defmodule TailRecursive do
+  def factorial(n),   do: _fact(n, 1)
+  defp _fact(0, acc), do: acc
+  defp _fact(n, acc), do: _fact(n - 1, acc * n)
+end
+```
