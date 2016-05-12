@@ -1356,3 +1356,152 @@ defmodule TailRecursive do
   defp _fact(n, acc), do: _fact(n - 1, acc * n)
 end
 ```
+#### Process Overhead
+Run with
+```
+elixir --erl "+P 1000000"  -r chain.exs -e "Chain.run(1_000_000)"
+```
+```
+defmodule Chain do
+  def counter(next_pid) do
+    receive do
+      n ->
+        send next_pid, n + 1
+    end
+  end
+
+  def create_processes(n) do
+    last = Enum.reduce 1..n, self,
+      fn(_, send_to) ->
+        spanw(Chain, :counter, [send_to])
+      end
+
+    # start the count by sending
+    send last, 0
+
+    # and wait for the result to come back
+    receive do
+      final_answer when is_integer(final_answer) ->
+        "Result is #{inspect(final_answer)}"
+    end
+  end
+
+  def run(n) do
+    IO.puts inspect :timer.tc(Chain, :create_processes, [n])
+  end
+end
+```
+#### When Process Die
+```
+defmodule Link1 do
+  import :timer, only: [sleep: 1]
+
+  def sad_function do
+    sleep 500
+    exit(:boom)
+  end
+
+  def run do
+    Process.flag(:trap_exit, true)
+    spawn(Link1, :sad_function, [])
+    receive do
+      msg ->
+        IO.puts "Message received: #{inspect msg}"
+    after 1000 ->
+        IO.puts "Nothing happened as far as i'm concerned"
+    end
+  end
+end
+
+Link1.run # Nothing happened as far as i'm concerned
+```
+#### Linking 2 processes
+```
+defmodule Link2 do
+  import :timer, only: [sleep: 1]
+
+  def sad_function do
+    sleep 500
+    exit(:boom)
+  end
+
+  def run do
+    spawn_link(Link2, :sad_function, [])
+    receive do
+      msg ->
+        IO.puts "Message received: #{inspect msg}"
+    after 1000 ->
+        IO.puts "Nothing happened as far as i'm concerned"
+    end
+  end
+end
+
+Link2.run # Message received: {:EXIT, #PID<0.121.0>, :boom}
+```
+Trapping exit signal from child process
+```
+defmodule Link3 do
+  import :timer, only: [sleep: 1]
+
+  def sad_function do
+    sleep 500
+    exit(:boom)
+  end
+
+  def run do
+    Process.flag(:trap_exit, true)
+    spawn_link(Link2, :sad_function, [])
+    receive do
+      msg ->
+        IO.puts "Message received: #{inspect msg}"
+    after 1000 ->
+        IO.puts "Nothing happened as far as i'm concerned"
+    end
+  end
+end
+
+Link3.run # Message received: {:EXIT, #PID<0.121.0>, :boom}
+```
+#### Monitoring Process
+```
+defmodule Monitor1 do
+  import :timer, only: [sleep: 1]
+
+  def sad_method do
+    sleep 500
+    exit(:boom)
+  end
+
+  def run do
+    res = spawn_monitor(Monitor1, :sad_method, [])
+    IO.puts inspect res
+    receive do
+      msg ->
+        IO.puts "Message received: #{inspect msg}"
+    after 1000 ->
+        IO.puts "Nothing happened as far as i'm concerned"
+    end
+  end
+end
+
+Monitor1.run
+{#PID<0.37.0>,#Reference<0.0.0.53>}
+MESSAGE RECEIVED: {:DOWN,#Reference<0.0.0.53>,:process,#PID<0.37.0>,:boom}
+```
+#### Parallel Map—The “Hello, World” of Erlang
+```
+defmodule Parallel do
+  def pmap(collection, fun) do
+    me = self
+    collection
+    |> Enum.map(fn (elem) ->
+         spawn_link fn -> (send me, {self, fun.(elem)}) end
+       end)
+    |> Enum.map(fn(pid) ->
+         receive do { ^pid, result } -> result end
+       end)
+  end
+end
+
+
+```
