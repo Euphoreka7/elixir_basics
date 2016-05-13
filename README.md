@@ -1663,3 +1663,12 @@ defmodule Client do
   end
 end
 ```
+#### I/O, PIDs, and Nodes
+```
+Node.connect(:"one@finn") # window2
+:global.register_name(:two, :erlang.group_leader) # window2
+two = :global.whereis_name :two # window1
+IO.puts(two, "Hello") # window1
+```
+### OTP: Servers
+
