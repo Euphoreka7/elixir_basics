@@ -1510,7 +1510,7 @@ end
 defmodule FibSolver do
   def fib(scheduler) do
     send scheduler, {:ready, self}
-    
+
     receive do
       {:fib, n, client} ->
         send client, {:answer, n, fib_calc(n), self}
@@ -1524,14 +1524,14 @@ defmodule FibSolver do
   defp fib_calc(1), do: 1
   defp fib_calc(n), do: fib_calc(n-1) + fib_calc(n-2)
 end
-  
+
 defmodule Scheduler do
   def run(num_processes, module, func, to_calculate) do
     (1..num_processes)
     |> Enum.map(fn(_) -> spawn(module, func, [self]) end)
     |> schedule_processes(to_calculate, [])
   end
-  
+
   defp schedule_processes(processes, queue, results) do
     receive do
       {:ready, pid} when length(queue) > 0 ->
@@ -1569,11 +1569,11 @@ defmodule FibAgent do
     cache = Enum.into([{0, 0}, {1, 1}], HashDict.new)
     Agent.start_link(fn -> cache end)
   end
-  
+
   def fib(pid, n) when n >= 0 do
     Agent.get_and_update(pid, &do_fib(&1, n))
   end
-  
+
   defp do_fib(cache, n) do
     if cached = cache[n] do
       {cached, cache}
@@ -1593,12 +1593,12 @@ Node.self # :nonode@nohost
 ```
 
 ```
-iex --name wibble@finn.local 
-iex(wibble@finn.local)> Node.self 
+iex --name wibble@finn.local
+iex(wibble@finn.local)> Node.self
 :"wibble@finn.local"
 
-iex --sname wobble 
-iex(wobble@finn)> Node.self 
+iex --sname wobble
+iex(wobble@finn)> Node.self
 :"wobble@finn"
 
 iex --sname node_one
@@ -1616,4 +1616,50 @@ default cookie stored at home directory in `.erlang.cookie` file
 ```
 iex --sname node_one --cookie cookie-one
 iex --sname node_two --cookie cookie-one
+```
+#### Naming Processes
+```
+defmodule Ticker do
+  @interval 2000 # 2 seconds
+  @name :ticker
+
+  def start do
+    pid = spawn(__MODULE__, :generator, [[]])
+    :global.register_name(@name, pid)
+  end
+
+  def register(client_pid) do
+    send :global.whereis_name(@name), {:register, client_pid}
+  end
+
+  def generator(clients) do
+    receive do
+      {:register, pid} ->
+        IO.puts "registering #{inspect pid}"
+        generator([pid | clients])
+    after
+      @interval ->
+        IO.puts "tick"
+        Enum.each clients, fn client ->
+          send client, {:tick}
+        end
+        generator(clients)
+    end
+  end
+end
+
+defmodule Client do
+  def start do
+    pid = spawn(__MODULE__, :receiver, [])
+    Ticker.register(pid)
+  end
+
+  def receiver do
+    receive do
+      {:tick} ->
+        IO.puts "tock in client"
+        receiver
+    end
+  end
+end
 ```
