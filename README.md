@@ -1670,5 +1670,159 @@ Node.connect(:"one@finn") # window2
 two = :global.whereis_name :two # window1
 IO.puts(two, "Hello") # window1
 ```
-### OTP: Servers
+### Tasks and Agents
+#### Tasks
+```
+defmodule Fib do
+  def of(0), do: 0
+  def of(1), do: 1
+  def of(n), do: Fib.of(n-1) + Fib.of(n-2)
+end
+
+IO.puts "Start the task"
+worker = Task.async(fn -> Fib.of(20) end)
+IO.puts "Do something else"
+IO.puts "Wait for the task"
+result = Task.await(worker)
+IO.puts "The result is #{result}"
+
+worker = Task.async(Fib, :of, [20])
+result = Task.await(worker)
+IO.puts "The result is #{result}"
+```
+#### Agents
+```
+{:ok, count} = Agent.start(fn -> 0 end)
+Agent.get(count, &(&1)) # 0
+Agent.update(count, &(&1+1)) # :ok
+Agent.update(count, &(&1+1)) # :ok
+Agent.get(count, &(&1)) # 2
+
+Agent.start(fn -> 1 end, name: Sum)
+Agent.get(Sum, &(&1)) # 1
+Agent.update(Sum, &(&1+99)) # :ok
+Agent.get(Sum, &(&1)) # 100
+```
+
+```
+defmodule Frequency do
+  def start_link do
+    Agent.start_link(fn -> HashDict.new end, name: __MODULE__)
+  end
+
+  def add_word(word) do
+    Agent.update(__MODULE__,
+                 fn dict ->
+                   Dict.update(dict, word, 1, &(&1+1))
+                 end)
+  end
+
+  def count_for(word) do
+    Agent.get(__MODULE__, fn dict -> Dict.get(dict, word) end)
+  end
+
+  def words do
+    Agent.get(__MODULE__, fn dict -> Dict.keys(dict) end)
+  end
+end
+
+Frequency.start_link
+Frequency.add_word "bob"
+Frequency.words # ["bob"]
+Frequency.add_word "was"
+Frequency.add_word "here"
+Frequency.add_word "he"
+Frequency.add_word "was"
+Frequency.words # ["he", "bob", "was", "here"]
+Frequency.count_for("bob") # 1
+Frequency.count_for("was") # 2
+```
+### Macros and Code Evaluation
+#### Macro
+```
+defmodule My do
+  defmacro macro(param) do
+    IO.inspect param
+  end
+end
+
+defmodule Test do
+  require My
+  My.macro :atom       #=> :atom
+  My.macro 1           #=> 1
+  My.macro 1.0         #=> 1.0
+  My.macro [1,2,3]     #=> [1,2,3]
+  My.macro "binaries"  #=> "binaries"
+  My.macro { 1, 2 }    #=> {1,2}
+  My.macro do: 1       #=> [do: 1]
+  My.macro do
+    1
+  end                  #=> [do: 1]
+end
+```
+#### The Quote Function
+```
+quote do: :atom # :atom
+quote do: 1 # 1
+quote do: [do: 1] # [do: 1]
+quote do: {1,2,3,4,5} # {:"{}",[],[1,2,3,4,5]}
+```
+#### Using the Representation As Code
+```
+defmodule My do
+  defmacro macro(code) do
+    IO.inspect code
+    code
+  end
+end
+
+defmodule Test do
+  require My
+  My.macro(IO.puts("hello"))
+end
+```
+result:
+```
+{{:.,[line: 11],[{:__aliases__,[line: 11],[:IO]},:puts]}, [line: 11],["hello"]}
+hello
+```
+
+```
+defmodule My do
+  defmacro macro(code) do
+    quote do
+      IO.inspect(unquote(code))
+    end
+  end
+end
+```
+
+```
+Code.eval_quoted(quote do: [1,2,unquote([3,4])]) # {[1,2,[3,4]],[]}
+Code.eval_quoted(quote do: [1,2,unquote_splicing([3,4])]) # {[1,2,3,4],[]}
+```
+
+```
+defmodule My do
+  defmacro if(condition, clauses) do
+    do_clause = Keyword.get(clauses, :do, nil)
+    else_clause = Keyword.get(clauses, :else, nil)
+    quote do
+      case unquote(condition) do
+        val when val in [false, nil] -> unquote(else_clause)
+        _ -> unquote(do_clause)
+      end
+    end
+  end
+end
+
+defmodule Test do
+  require My
+  My.if 1==2 do
+    IO.puts "1 == 2"
+  else
+    IO.puts "1 != 2"
+  end
+end
+```
 
