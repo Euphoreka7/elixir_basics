@@ -1825,4 +1825,90 @@ defmodule Test do
   end
 end
 ```
+#### Using Bindings to Inject Values
+```
+defmodule My do
+  defmacro mydef(name) do
+    quote bind_quoted: [name: name] do
+      def unquote(name)(), do: unquote(name)
+    end
+  end
+end
 
+defmodule Test do
+  require My
+  [:fred, :bert] |> Enum.each(&My.mydef(&1))
+end
+
+
+IO.puts Test.fred #=> fred
+```
+#### Other Ways to Run Code Fragments
+```
+fragment = quote do: IO.puts("hello")
+Code.eval_quoted fragment
+
+fragment = quote do: IO.puts(var!(a))
+Code.eval_quoted fragment, [a: "cat"]
+
+fragment = Code.string_to_quoted("defmodule A do def b(c) do c+1 end end")
+Macro.to_string(fragment)
+Code.eval_string("[a, a*b, c]", [a: 2, b: 3, c: 4])
+
+quote do: 1 + 2 # {:+, [context: Elixir, import: Kernel], [1, 2]}
+Code.eval_quoted {:+, [], [1,2]} # {3,[]}
+```
+#### Macros and Operators
+```
+defmodule Operators do
+  defmacro a + b do
+    quote do
+      to_string(unquote(a)) <> to_string(unquote(b))
+    end
+  end
+end
+
+defmodule Test do
+  IO.puts(123 + 456)             #=> "579"
+  import Kernel, except: [+: 2]
+  import Operators
+  IO.puts(123 + 456)             #=> "123456"
+end
+
+IO.puts(123 + 456)               #=> "579"
+
+
+require Macro
+Macro.binary_ops
+Macro.unary_ops
+```
+### Behaviours and Use
+#### Defining Behaviours
+```
+
+defmodule URI.Parser do
+  @moduledoc """
+  Defines the behavior for each URI.Parser. 
+  Check URI.HTTP for a possible implementation. 
+  """
+  use Behaviour
+  
+  @doc """
+  Responsible for parsing extra URL information.
+  """
+  defcallback parse(uri_info :: URI.Info.t) :: URI.Info.t
+  
+  @doc """
+  Responsible for returning the default port. 
+  """
+  defcallback default_port() :: integer
+end
+```
+#### Declaring Behaviours
+```
+defmodule URI.HTTP do 
+  @behaviour URI.Parser
+  def default_port(), do: 80 
+  def parse(info), do: info
+end
+```
