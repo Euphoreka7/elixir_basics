@@ -2151,3 +2151,105 @@ end
 Example.rgb #=> 16711680 (== 0xff0000)
 Example.hsb #=> {0,100,100}
 ```
+### Exceptions
+#### Raising an Exception
+```
+raise "Giving up" # ** (RuntimeError) Giving up
+raise RuntimeError # ** (RuntimeError) runtime error
+raise RuntimeError, message: "override message" # ** (RuntimeError) override message
+```
+```
+defmodule Boom do
+  def start(n) do
+    try do
+      raise_error(n)
+    rescue
+      [ FunctionClauseError, RuntimeError ] ->
+        IO.puts "no function match or runtime error"
+      error in [ArithmeticError]  ->
+        IO.puts "Uh-oh! Arithmetic error: #{error.message}"
+        raise error, [ message: "too late, we're doomed"], System.stacktrace
+      other_errors ->
+        IO.puts "Disaster! #{other_errors.message}"
+    after
+      IO.puts "DONE!"
+    end
+  end
+
+  defp raise_error(0) do
+    IO.puts "No error"
+  end
+
+  defp raise_error(1) do
+    IO.puts "About to divide by zero"
+    1 / 0
+  end
+
+  defp raise_error(2) do
+    IO.puts "About to call a function that doesn't exist"
+    raise_error(99)
+  end
+
+  defp raise_error(3) do
+    IO.puts "About to try creating a directory with no permission"
+    File.mkdir!("/not_allowed")
+  end
+end
+```
+#### catch, exit, and throw
+```
+defmodule Catch do
+  def start(n) do
+    try do
+      incite(n)
+    catch
+      :exit, code   -> "Exited with code #{inspect code}"
+      :throw, value -> "throw called with #{inspect value}"
+      what, value   -> "Caught #{inspect what} with #{inspect value}"
+    end
+  end
+
+  defp incite(1) do
+    exit(:something_bad_happened)
+  end
+
+  defp incite(2) do
+    throw {:animal, "wombat"}
+  end
+
+  defp incite(3) do
+    :erlang.error "Oh no!"
+  end
+end
+```
+#### Defining Exceptions
+```
+defmodule KinectProtocolError do
+  defexception message: "Kinect protocol error",
+               can_retry: false
+
+  def full_message(me) do
+    "Kinect failed: #{me.message}, retriable: #{me.can_retry}"
+  end
+end
+
+defmodule B do
+  def talk_to_kinect do
+    raise KinectProtocolError, message: "usb unplugged", can_retry: true
+  end
+
+  def schedule_retry do
+    IO.puts "Retrying in 10 seconds"
+  end
+
+  def start do
+    try do
+      talk_to_kinect
+    rescue
+      error in [KinectProtocolError] ->
+        IO.puts KinectProtocolError.full_message(error)
+        if error.can_retry, do: schedule_retry
+    end
+  end
+end
+```
