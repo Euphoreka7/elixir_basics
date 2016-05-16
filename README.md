@@ -1949,3 +1949,205 @@ defmodule Test do
   def add_list(list),          do: Enum.reduce(list, 0, &(&1+&2))
 end
 ```
+### Protocols
+#### Defining a Protocol
+```
+defprotocol Inspect do
+  def inspect(thing, opts)
+end
+```
+Implementation goes separately.
+#### Implementing a Protocol
+```
+defimpl Inspect, for: PID do
+  def inspect(pid, _opts) do
+    "#PID" <> iolist_to_binary(:erlang.pid_to_list(pid))
+  end
+end
+
+defimpl Inspect, for: Reference do
+  def inspect(ref, _opts) do
+    '#Ref' ++ rest = :erlang.ref_to_list(ref)
+    "#Reference" <> iolist_to_binary(rest)
+  end
+end
+```
+Defaults can be redefined:
+```
+defimpl Inspect, for: PID do
+  def inspect(pid, _) do
+    "#Process: " <> iolist_to_binary(:erlang.pid_to_list(pid)) <> "!!"
+  end
+end
+```
+
+```
+defprotocol Collection do
+  @fallback_to_any true
+  def is_collection?(value)
+end
+
+defimpl Collection, for: [List, Tuple, BitString] do
+  def is_collection?(_), do: true
+end
+
+defimpl Collection, for: Any do
+  def is_collection?(_), do: false
+end
+
+Enum.each [ 1, 1.0, [1,2], {1,2}, HashDict.new, "cat" ], fn value ->
+  IO.puts "#{inspect value}: #{Collection.is_collection?(value)}"
+end
+```
+#### Protocols and Structs
+```
+defmodule Blob do
+  defstruct content: nil
+end
+
+b = %Blob(content: 123)
+inspect b # "%Blob{content: 123}"
+inspect b, structs: false # "%{__struct__: Blob, content: 123}"
+```
+#### Built-in Protocols: Enumerable
+```
+defprotocol Enumerable do
+  def count(collection)
+  def member?(collection, value)
+  def reduce(collection, acc, fun)
+end
+```
+```
+defmodule Bitmap do
+  defstruct value: 0
+  defimpl Enumerable do
+    import :math, only: [log: 1]
+    def count(%Bitmap{value: value}) do
+      { :ok, trunc(log(abs(value))/log(2)) + 1 }
+    end
+  end
+end
+
+fifty = %Bitmap{value: 50}
+IO.puts Enum.count fifty
+
+def member?(value, bit_number) do
+  {:ok, 0 <= bit_number && bit_number < Enum.count(value)}
+end
+
+IO.puts Enum.member? fifty, 4 # => true
+IO.puts Enum.member? fifty, 6 # => false
+
+def reduce(bitmap, {:cont, acc}, fun) do
+  bit_count = Enum.count(bitmap)
+  _reduce({bitmap, bit_count}, { :cont, acc }, fun)
+end
+
+defp _reduce({_bitmap, -1}, { :cont, acc }, _fun), do: { :done, acc }
+defp _reduce({bitmap, bit_number}, { :cont, acc }, fun) do
+  _reduce({bitmap, bit_number-1}, fun.(bitmap[bit_number], acc), fun)
+end
+defp _reduce({_bitmap, _bit_number}, { :halt, acc }, _fun), do: { :halted, acc }
+defp _reduce({bitmap, bit_number}, { :suspend, acc }, fun),
+do: { :suspended, acc, &_reduce({bitmap, bit_number}, &1, fun), fun }
+
+IO.inspect Enum.reverse fifty # => [0, 1, 0, 0, 1, 1, 0]
+IO.inspect Enum.join fifty, ":" # => "0:1:1:0:0:1:0"
+```
+#### Built-in Protocols: String.Chars
+```
+defmodule Bitmap do
+  defstruct value: 0
+
+  defimpl String.Chars do
+    def to_string(value), do: Enum.join(value, "")
+  end
+end
+
+fifty = %Bitmap{value: 50}
+IO.puts "Fifty in bits is #{fifty}" # => Fifty in bits is 0110010
+```
+#### Built-in Protocols: Inspect
+```
+defmodule Bitmap do
+  defstruct value: 0
+
+  defimpl Inspect do
+    def inspect(%Bitmap{value: value}, _opts) do
+      "%Bitmap{#{value}=#{as_binary(value)}}"
+    end
+
+    defp as_binary(value) do
+      to_string(:io_lib.format("~.2B", [value]))
+    end
+  end
+end
+
+fifty = %Bitmap{value: 50}
+IO.inspect fifty                 # => %Bitmap{50=0110010}
+IO.inspect fifty, structs: false # => %{__struct__: Bitmap, value: 50}
+#### Writing Your Own Sigils
+```
+defmodule LineSigil do @doc """
+  Implement the `~l` sigil, which takes a string containing
+  multiple lines and returns a list of those lines.
+
+  ## Example usage
+      iex> import LineSigil
+      nil
+      iex> ~l"""
+      ...> one
+      ...> two
+      ...> three
+      ...> """ ["one","two","three"]
+  """
+  def sigil_l(lines, _opts) do
+    lines |> String.rstrip |> String.split("\n")
+  end
+end
+
+defmodule Example do
+  import LineSigil
+  def lines do
+    ~l"""
+    line 1
+    line 2
+    and another line in #{__MODULE__}
+    """
+  end
+end
+```
+
+```
+defmodule ColorSigil do
+  @color_map [
+    rgb: [red: 0xff0000, green: 0x00ff00, blue: 0x0000ff],
+    hsb: [red: {0,100,100}, green: {120,100,100}, blue: {240,100,100}]
+  ]
+
+  def sigil_c(color_name, []), do: _c(color_name, :rgb)
+  def sigil_c(color_name, 'r'), do: _c(color_name, :rgb)
+  def sigil_c(color_name, 'h'), do: _c(color_name, :hsb)
+
+  defp _c(color_name, color_space) do
+    @color_map[color_space][binary_to_atom(color_name)]
+  end
+
+  defmacro __using__(_opts) do
+    quote do
+      import Kernel, except: [sigil_c: 2]
+      import unquote(__MODULE__), only: [sigil_c: 2]
+    end
+  end
+end
+
+defmodule Example do
+  use ColorSigil
+
+  def rgb, do: IO.inspect ~c{red}
+  def hsb, do: IO.inspect ~c{red}h
+end
+
+Example.rgb #=> 16711680 (== 0xff0000)
+Example.hsb #=> {0,100,100}
+```
